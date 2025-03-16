@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>同學端 - 我的成績</title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <style>
+    body {
+      padding: 20px;
+      background-image: url("images/background.jpg");
+      background-size: cover;
+      background-repeat: no-repeat;
+      background-position: center;
+    }
+    .container {
+      background-color: rgba(255,255,255,0.85);
+      padding: 20px;
+      border-radius: 8px;
+    }
+    h1, h2, label {
+      text-decoration: underline;
+    }
+    .loading-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100px;
+    }
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #3498db;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    /* 固定在右下角的版權資訊 */
+    .footer {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      color: white;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="mb-4">同學端 - 我的成績</h1>
+    
+    <!-- 輸入同學姓名作為查詢依據 -->
+    <div class="form-group">
+      <label for="myName">請輸入您的姓名</label>
+      <input type="text" id="myName" class="form-control" placeholder="例如：王晟安">
+    </div>
+    <button id="viewMyInfo" class="btn btn-primary mb-3">查詢我的成績資訊（平均分數與排名）</button>
+    <div id="myInfoResult" class="mb-4"></div>
+    
+    <!-- 查詢自己的所有成績列表 -->
+    <button id="viewMyScores" class="btn btn-info mb-3">查詢我的成績列表</button>
+    <div id="myScoresResult" class="mb-4"></div>
+    
+    <!-- 查看分數分佈 -->
+    <h2 class="mt-4">分數分佈</h2>
+    <button id="viewDistribution" class="btn btn-info mb-4">查看分數分佈</button>
+    <div id="distributionResult"></div>
+    
+    <!-- 班級照片按鈕 -->
+    <h2 class="mt-4">班級照片</h2>
+    <a href="https://drive.google.com/drive/folders/1sDtxDEkNI2actKi8ePfxxA1C_HUbvtxz" target="_blank" class="btn btn-success mb-4">班級照片</a>
+  </div>
+  
+  <!-- 右下角固定的版權資訊 -->
+  <div class="footer">盧彥勳爆肝製作</div>
+  
+  <!-- 引入 Bootstrap JS 與相關依賴 -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  <script>
+    // 查詢我的成績資訊（平均分數、排名）
+    document.getElementById("viewMyInfo").addEventListener("click", async function() {
+      const myName = document.getElementById("myName").value.trim();
+      if (!myName) {
+        alert("請輸入您的姓名！");
+        return;
+      }
+      document.getElementById("myInfoResult").innerHTML = `
+        <div class="loading-container">
+          <div class="spinner"></div>
+        </div>`;
+      
+      try {
+        // 呼叫教師端的平均排名 API
+        const response = await fetch("http://localhost:3000/grades/averageRanking");
+        const result = await response.json();
+        if (response.ok) {
+          // 過濾出該同學的資料
+          const myData = result.data.find(item => item.studentName === myName);
+          let html = `<h3>我的成績資訊：</h3>`;
+          if (myData) {
+            html += `<ul class="list-group">
+              <li class="list-group-item"><strong>平均分數：</strong> ${myData.avgScore.toFixed(2)} 分</li>
+              <li class="list-group-item"><strong>排名：</strong> ${myData.rank}</li>
+            </ul>`;
+          } else {
+            html += `<p>找不到您的資料，請確認姓名輸入正確！</p>`;
+          }
+          document.getElementById("myInfoResult").innerHTML = html;
+        } else {
+          document.getElementById("myInfoResult").innerHTML = `<div class="alert alert-danger">查詢失敗：${result.message}</div>`;
+        }
+      } catch (error) {
+        document.getElementById("myInfoResult").innerHTML = `<div class="alert alert-danger">查詢失敗：${error}</div>`;
+      }
+    });
+
+    // 查詢我的成績列表（所有成績）
+    document.getElementById("viewMyScores").addEventListener("click", async function() {
+      const myName = document.getElementById("myName").value.trim();
+      if (!myName) {
+        alert("請輸入您的姓名！");
+        return;
+      }
+      document.getElementById("myScoresResult").innerHTML = `
+        <div class="loading-container">
+          <div class="spinner"></div>
+        </div>`;
+      
+      try {
+        // 呼叫 GET /grades 取得所有成績
+        const response = await fetch("http://localhost:3000/grades");
+        const result = await response.json();
+        if (response.ok) {
+          // 過濾出該同學的成績
+          const myScores = result.data.filter(item => item.studentName === myName);
+          let html = `<h3>我的成績列表：</h3>`;
+          if (myScores && myScores.length > 0) {
+            html += `<ul class="list-group">`;
+            myScores.forEach(scoreItem => {
+              html += `<li class="list-group-item"><strong>科目：</strong>${scoreItem.subject}，<strong>分數：</strong>${scoreItem.score} 分</li>`;
+            });
+            html += `</ul>`;
+          } else {
+            html += `<p>找不到您的成績資料，請確認姓名輸入正確或尚未新增成績！</p>`;
+          }
+          document.getElementById("myScoresResult").innerHTML = html;
+        } else {
+          document.getElementById("myScoresResult").innerHTML = `<div class="alert alert-danger">查詢失敗：${result.message}</div>`;
+        }
+      } catch (error) {
+        document.getElementById("myScoresResult").innerHTML = `<div class="alert alert-danger">查詢失敗：${error}</div>`;
+      }
+    });
+
+    // 查看分數分佈的處理
+    document.getElementById("viewDistribution").addEventListener("click", async function() {
+      document.getElementById("distributionResult").innerHTML = `
+        <div class="loading-container">
+          <div class="spinner"></div>
+        </div>`;
+      try {
+        const response = await fetch("http://localhost:3000/grades/scoreDistribution");
+        const result = await response.json();
+        if (response.ok) {
+          let html = "<h3>分數分佈：</h3><ul class='list-group'>";
+          result.data.forEach(bucket => {
+            html += `<li class="list-group-item"><strong>${bucket.range}</strong>: ${bucket.count} 人</li>`;
+          });
+          html += "</ul>";
+          document.getElementById("distributionResult").innerHTML = html;
+        } else {
+          document.getElementById("distributionResult").innerHTML = `<div class="alert alert-danger">查詢分佈失敗：${result.message}</div>`;
+        }
+      } catch (error) {
+        document.getElementById("distributionResult").innerHTML = `<div class="alert alert-danger">查詢分佈失敗：${error}</div>`;
+      }
+    });
+  </script>
+</body>
+</html>

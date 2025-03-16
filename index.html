@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>成績管理系統前端</title>
+  <!-- 引入 Bootstrap CSS -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <style>
+    /* 背景圖片設定：請確認圖片放在 images 資料夾中且檔名為 background.jpg */
+    body {
+      padding: 20px;
+      background-image: url("images/background.jpg");
+      background-size: cover;
+      background-repeat: no-repeat;
+      background-position: center;
+    }
+    /* 移除容器背景色設定，保持透明 */
+    .container {
+      background-color: transparent;
+      padding: 20px;
+    }
+    /* 為所有 h1, h2, label 加上底線 */
+    h1, h2, label {
+      text-decoration: underline;
+    }
+    .form-actions {
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-start;
+    }
+    .form-actions form {
+      flex: 1;
+      margin-bottom: 0;
+    }
+    .form-actions button {
+      margin-bottom: 0;
+    }
+    /* 載入動畫 */
+    .loading-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100px;
+    }
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #3498db;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    /* 固定右下角的標示 */
+    .footer {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      color: white;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="mb-4">成績管理系統</h1>
+    
+    <!-- 表單與刪除所有成績按鈕放在同一行，無「新增成績」大標題 -->
+    <div class="form-actions mb-4">
+      <form id="gradeForm">
+        <div class="form-group">
+          <label for="studentName">學生姓名</label>
+          <select id="studentName" class="form-control" required>
+            <option value="">請選擇學生</option>
+            <option value="王晟安">王晟安</option>
+            <option value="朱映潔">朱映潔</option>
+            <option value="李仲恩">李仲恩</option>
+            <option value="李至勛">李至勛</option>
+            <option value="林玳亘">林玳亘</option>
+            <option value="林祺安">林祺安</option>
+            <option value="邱子謙">邱子謙</option>
+            <option value="邱詰雅">邱詰雅</option>
+            <option value="康睿淮">康睿淮</option>
+            <option value="張尚安">張尚安</option>
+            <option value="張彧維">張彧維</option>
+            <option value="陳沛岑">陳沛岑</option>
+            <option value="陳玨希">陳玨希</option>
+            <option value="陳星睿">陳星睿</option>
+            <option value="曾台丞">曾台丞</option>
+            <option value="黃雨媞">黃雨媞</option>
+            <option value="黃品溱">黃品溱</option>
+            <option value="蔡丞祐">蔡丞祐</option>
+            <option value="蔡有晉">蔡有晉</option>
+            <option value="盧彥勳">盧彥勳</option>
+            <option value="蕭郁蓁">蕭郁蓁</option>
+            <option value="簡唯羽">簡唯羽</option>
+            <option value="羅翊珊">羅翊珊</option>
+            <option value="金雍勝">金雍勝</option>
+          </select>
+          <br>
+          <label for="subject">科目</label>
+          <select id="subject" class="form-control" required>
+            <option value="">請選擇科目</option>
+            <option value="生物">生物</option>
+            <option value="地理">地理</option>
+            <option value="公民">公民</option>
+            <option value="數學">數學</option>
+            <option value="作文">作文</option>
+            <option value="歷史">歷史</option>
+            <option value="英文單字">英文單字</option>
+            <option value="成語">成語</option>
+            <option value="國語">國語</option>
+          </select>
+          <br>
+          <label for="score">分數</label>
+          <input type="number" id="score" class="form-control" placeholder="分數" required>
+          <br>
+          <button type="submit" class="btn btn-primary">新增成績</button>
+        </div>
+      </form>
+      <!-- 刪除所有成績的按鈕 -->
+      <div class="col-md-3">
+        <button id="deleteAllGrades" class="btn btn-danger btn-block">刪除所有成績</button>
+      </div>
+    </div>
+
+    <!-- 統整成績按鈕 -->
+    <h2>統整成績</h2>
+    <button id="mergeGrades" class="btn btn-warning mb-3">一鍵統整成績</button>
+    <div id="mergedResult" class="mb-4"></div>
+    
+    <!-- 組距統計按鈕 -->
+    <h2>組距統計</h2>
+    <button id="scoreDistribution" class="btn btn-info mb-3">統計分數組距</button>
+    <div id="distributionResult" class="mb-4"></div>
+    
+    <!-- 平均排名按鈕 -->
+    <h2>平均排名</h2>
+    <button id="averageRanking" class="btn btn-secondary mb-3">每人平均分數及排名</button>
+    <div id="averageRankingResult" class="mb-4"></div>
+    
+    <!-- 班級照片按鈕 -->
+    <h2>班級照片</h2>
+    <a href="https://drive.google.com/drive/folders/1sDtxDEkNI2actKi8ePfxxA1C_HUbvtxz" target="_blank" class="btn btn-success mb-3">班級照片</a>
+  </div>
+
+  <!-- 固定在右下角的版權資訊 -->
+  <div class="footer">盧彥勳爆肝製作</div>
+  
+  <!-- 引入 Bootstrap JS 與相依的 jQuery 與 Popper.js -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  
+  <script>
+    // 新增成績的處理
+    document.getElementById("gradeForm").addEventListener("submit", async function(e) {
+      e.preventDefault();
+      const studentName = document.getElementById("studentName").value.trim();
+      const subject = document.getElementById("subject").value;
+      const score = Number(document.getElementById("score").value);
+      
+      try {
+        const response = await fetch("http://localhost:3000/grades", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ studentName, subject, score })
+        });
+        const data = await response.json();
+        if(response.ok) {
+          console.log("新增成功：", data.data);
+          document.getElementById("gradeForm").reset();
+        } else {
+          console.error("新增失敗：", data.message);
+        }
+      } catch (error) {
+        console.error("新增失敗：", error);
+      }
+    });
+
+    // 刪除所有成績的處理
+    document.getElementById("deleteAllGrades").addEventListener("click", async function() {
+      if (confirm("確定要刪除所有成績嗎？這個操作無法復原！")) {
+        try {
+          const response = await fetch("http://localhost:3000/grades", {
+            method: "DELETE"
+          });
+          const result = await response.json();
+          if(response.ok) {
+            alert("所有成績已刪除");
+            document.getElementById("mergedResult").innerHTML = "";
+            document.getElementById("distributionResult").innerHTML = "";
+            document.getElementById("averageRankingResult").innerHTML = "";
+          } else {
+            alert("刪除失敗：" + result.message);
+          }
+        } catch (error) {
+          alert("刪除失敗：" + error);
+        }
+      }
+    });
+
+    // 統整成績的處理 (呼叫 POST /grades/merge)
+    document.getElementById("mergeGrades").addEventListener("click", async function() {
+      document.getElementById("mergedResult").innerHTML = `
+        <div class="loading-container">
+          <div class="spinner"></div>
+        </div>
+      `;
+      try {
+        const response = await fetch("http://localhost:3000/grades/merge", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({})
+        });
+        const result = await response.json();
+        if(response.ok) {
+          let html = "<h3>統整結果：</h3><ul class='list-group'>";
+          result.data.forEach(item => {
+            html += `<li class="list-group-item"><strong>${item._id}</strong>: `;
+            item.details.forEach(detail => {
+              html += `${detail.subject} - ${detail.score}分 `;
+            });
+            html += `</li>`;
+          });
+          html += "</ul>";
+          document.getElementById("mergedResult").innerHTML = html;
+        } else {
+          document.getElementById("mergedResult").innerHTML = '<div class="alert alert-danger">統整失敗：' + result.message + '</div>';
+        }
+      } catch (error) {
+        document.getElementById("mergedResult").innerHTML = '<div class="alert alert-danger">統整失敗：' + error + '</div>';
+      }
+    });
+
+    // 組距統計的處理 (呼叫 GET /grades/scoreDistribution)
+    document.getElementById("scoreDistribution").addEventListener("click", async function() {
+      document.getElementById("distributionResult").innerHTML = `
+        <div class="loading-container">
+          <div class="spinner"></div>
+        </div>
+      `;
+      try {
+        const response = await fetch("http://localhost:3000/grades/scoreDistribution");
+        const result = await response.json();
+        if(response.ok) {
+          let html = "<h3>組距統計結果：</h3><ul class='list-group'>";
+          result.data.forEach(bucket => {
+            html += `<li class="list-group-item"><strong>${bucket.range}</strong>: ${bucket.count} 筆`;
+            if(bucket.students && bucket.students.length > 0){
+              html += " (學生：" + bucket.students.join(", ") + ")";
+            }
+            html += `</li>`;
+          });
+          html += "</ul>";
+          document.getElementById("distributionResult").innerHTML = html;
+        } else {
+          document.getElementById("distributionResult").innerHTML = '<div class="alert alert-danger">組距統計失敗：' + result.message + '</div>';
+        }
+      } catch (error) {
+        document.getElementById("distributionResult").innerHTML = '<div class="alert alert-danger">組距統計失敗：' + error + '</div>';
+      }
+    });
+
+    // 每人平均加總後的平均排名的處理 (呼叫 GET /grades/averageRanking)
+    document.getElementById("averageRanking").addEventListener("click", async function() {
+      document.getElementById("averageRankingResult").innerHTML = `
+        <div class="loading-container">
+          <div class="spinner"></div>
+        </div>
+      `;
+      try {
+        const response = await fetch("http://localhost:3000/grades/averageRanking");
+        const result = await response.json();
+        if(response.ok) {
+          let html = "<h3>平均排名結果：</h3><ul class='list-group'>";
+          result.data.forEach(item => {
+            html += `<li class="list-group-item"><strong>${item.studentName}</strong>: 平均分數 ${item.avgScore.toFixed(2)} 分，排名 ${item.rank}</li>`;
+          });
+          html += "</ul>";
+          document.getElementById("averageRankingResult").innerHTML = html;
+        } else {
+          document.getElementById("averageRankingResult").innerHTML = '<div class="alert alert-danger">平均排名失敗：' + result.message + '</div>';
+        }
+      } catch (error) {
+        document.getElementById("averageRankingResult").innerHTML = '<div class="alert alert-danger">平均排名失敗：' + error + '</div>';
+      }
+    });
+  </script>
+</body>
+</html>
