@@ -71,7 +71,7 @@
   <div class="container">
     <h1 class="mb-4">成績管理系統</h1>
     
-    <!-- 表單與刪除所有成績按鈕放在同一行，無「新增成績」大標題 -->
+    <!-- 表單與刪除所有成績按鈕放在同一行 -->
     <div class="form-actions mb-4">
       <form id="gradeForm">
         <div class="form-group">
@@ -124,11 +124,13 @@
           <button type="submit" class="btn btn-primary">新增成績</button>
         </div>
       </form>
-      <!-- 刪除所有成績的按鈕 -->
-      <div class="col-md-3">
-        <button id="deleteAllGrades" class="btn btn-danger btn-block">刪除所有成績</button>
-      </div>
+      <button id="deleteAllGrades" class="btn btn-danger ml-2">刪除所有成績</button>
     </div>
+
+    <!-- 匯入 Excel 檔案 + 按鈕 -->
+    <h2>匯入 Excel</h2>
+    <input type="file" id="excelFile" accept=".xlsx,.xls" />
+    <button id="importExcel" class="btn btn-success mb-3">匯入 Excel</button>
 
     <!-- 統整成績按鈕 -->
     <h2>統整成績</h2>
@@ -150,50 +152,54 @@
     <a href="https://drive.google.com/drive/folders/1sDtxDEkNI2actKi8ePfxxA1C_HUbvtxz" target="_blank" class="btn btn-success mb-3">班級照片</a>
   </div>
 
-  <!-- 固定在右下角的版權資訊 -->
+  <!-- 固定在右下角的標示 -->
   <div class="footer">盧彥勳爆肝製作</div>
   
   <!-- 引入 Bootstrap JS 與相依的 jQuery 與 Popper.js -->
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
   <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-  
+
+  <!-- 引入 SheetJS (xlsx) 以解析 Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.0/dist/xlsx.full.min.js"></script>
+
   <script>
-    // 新增成績的處理
+    // 如果你的後端不在同一台電腦，請改成 "http://192.168.0.11:3000" 或你的伺服器 IP
+    const API_URL = "http://192.168.0.11:3000";
+
+    // =========== 新增成績 ===========
     document.getElementById("gradeForm").addEventListener("submit", async function(e) {
       e.preventDefault();
       const studentName = document.getElementById("studentName").value.trim();
-      const subject = document.getElementById("subject").value;
+      const subject = document.getElementById("subject").value.trim();
       const score = Number(document.getElementById("score").value);
-      
+
       try {
-        const response = await fetch("http://localhost:3000/grades", {
+        const response = await fetch(`${API_URL}/grades`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ studentName, subject, score })
         });
         const data = await response.json();
-        if(response.ok) {
-          console.log("新增成功：", data.data);
+        if (response.ok) {
+          alert("新增成功： " + studentName + " - " + subject + " - " + score);
           document.getElementById("gradeForm").reset();
         } else {
-          console.error("新增失敗：", data.message);
+          alert("新增失敗：" + data.message);
         }
       } catch (error) {
-        console.error("新增失敗：", error);
+        alert("新增失敗：" + error);
       }
     });
 
-    // 刪除所有成績的處理
+    // =========== 刪除所有成績 ===========
     document.getElementById("deleteAllGrades").addEventListener("click", async function() {
-      if (confirm("確定要刪除所有成績嗎？這個操作無法復原！")) {
+      if (confirm("確定要刪除所有成績嗎？")) {
         try {
-          const response = await fetch("http://localhost:3000/grades", {
-            method: "DELETE"
-          });
+          const response = await fetch(`${API_URL}/grades`, { method: "DELETE" });
           const result = await response.json();
-          if(response.ok) {
-            alert("所有成績已刪除");
+          if (response.ok) {
+            alert("所有成績已刪除！");
             document.getElementById("mergedResult").innerHTML = "";
             document.getElementById("distributionResult").innerHTML = "";
             document.getElementById("averageRankingResult").innerHTML = "";
@@ -206,7 +212,68 @@
       }
     });
 
-    // 統整成績的處理 (呼叫 POST /grades/merge)
+    // =========== 匯入 Excel ===========
+    document.getElementById("importExcel").addEventListener("click", async function() {
+      const fileInput = document.getElementById("excelFile");
+      if (!fileInput.files || fileInput.files.length === 0) {
+        alert("請先選擇 Excel 檔案");
+        return;
+      }
+      const file = fileInput.files[0];
+
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          const data = e.target.result;
+          // 用 SheetJS 讀取
+          const workbook = XLSX.read(data, { type: "binary" });
+          // 讀取第一個工作表
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          
+          // 轉成二維陣列
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          // e.g. [ [姓名, 科目, 分數], [王晟安, 數學, 100], ... ]
+          
+          const resultArr = [];
+          for (let i = 1; i < jsonData.length; i++) {
+            const row = jsonData[i];
+            // row[0] => 姓名, row[1] => 科目, row[2] => 分數
+            if (row[0] && row[1] && row[2]) {
+              resultArr.push({
+                studentName: row[0],
+                subject: row[1],
+                score: Number(row[2])
+              });
+            }
+          }
+          
+          if (resultArr.length === 0) {
+            alert("Excel 內沒有成績資料或格式錯誤");
+            return;
+          }
+
+          // 呼叫後端批次新增 API: POST /grades/batch
+          const response = await fetch(`${API_URL}/grades/batch`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ grades: resultArr })
+          });
+          const result = await response.json();
+          if (response.ok) {
+            alert("Excel 成績匯入成功！共 " + result.count + " 筆");
+            fileInput.value = ""; // 清除檔案
+          } else {
+            alert("Excel 匯入失敗：" + result.message);
+          }
+        } catch (err) {
+          alert("Excel 解析失敗：" + err);
+        }
+      };
+      reader.readAsBinaryString(file);
+    });
+
+    // =========== 統整成績 (POST /grades/merge) ===========
     document.getElementById("mergeGrades").addEventListener("click", async function() {
       document.getElementById("mergedResult").innerHTML = `
         <div class="loading-container">
@@ -214,13 +281,13 @@
         </div>
       `;
       try {
-        const response = await fetch("http://localhost:3000/grades/merge", {
+        const response = await fetch(`${API_URL}/grades/merge`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({})
         });
         const result = await response.json();
-        if(response.ok) {
+        if (response.ok) {
           let html = "<h3>統整結果：</h3><ul class='list-group'>";
           result.data.forEach(item => {
             html += `<li class="list-group-item"><strong>${item._id}</strong>: `;
@@ -239,7 +306,7 @@
       }
     });
 
-    // 組距統計的處理 (呼叫 GET /grades/scoreDistribution)
+    // =========== 組距統計 (GET /grades/scoreDistribution) ===========
     document.getElementById("scoreDistribution").addEventListener("click", async function() {
       document.getElementById("distributionResult").innerHTML = `
         <div class="loading-container">
@@ -247,16 +314,12 @@
         </div>
       `;
       try {
-        const response = await fetch("http://localhost:3000/grades/scoreDistribution");
+        const response = await fetch(`${API_URL}/grades/scoreDistribution`);
         const result = await response.json();
         if(response.ok) {
           let html = "<h3>組距統計結果：</h3><ul class='list-group'>";
           result.data.forEach(bucket => {
-            html += `<li class="list-group-item"><strong>${bucket.range}</strong>: ${bucket.count} 筆`;
-            if(bucket.students && bucket.students.length > 0){
-              html += " (學生：" + bucket.students.join(", ") + ")";
-            }
-            html += `</li>`;
+            html += `<li class="list-group-item"><strong>${bucket.range}</strong>: ${bucket.count} 筆</li>`;
           });
           html += "</ul>";
           document.getElementById("distributionResult").innerHTML = html;
@@ -268,7 +331,7 @@
       }
     });
 
-    // 每人平均加總後的平均排名的處理 (呼叫 GET /grades/averageRanking)
+    // =========== 每人平均分數及排名 (GET /grades/averageRanking) ===========
     document.getElementById("averageRanking").addEventListener("click", async function() {
       document.getElementById("averageRankingResult").innerHTML = `
         <div class="loading-container">
@@ -276,7 +339,7 @@
         </div>
       `;
       try {
-        const response = await fetch("http://localhost:3000/grades/averageRanking");
+        const response = await fetch(`${API_URL}/grades/averageRanking`);
         const result = await response.json();
         if(response.ok) {
           let html = "<h3>平均排名結果：</h3><ul class='list-group'>";

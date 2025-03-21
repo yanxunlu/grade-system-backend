@@ -16,9 +16,8 @@ app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "images")));
 
 // 連線 MongoDB（請確認帳號、密碼、叢集名稱、資料庫名稱皆正確）
-const mongoURI = "mongodb+srv://yanxun:a510755555@cluster0.8j0ui.mongodb.net/gradeSystem?retryWrites=true&w=majority&appName=Cluster0";
 mongoose
-  .connect(mongoURI)
+  .connect("mongodb+srv://yanxun:a510755555@cluster0.8j0ui.mongodb.net/gradeSystem?retryWrites=true&w=majority&appName=Cluster0")
   .then(() => console.log("✅ 已連線 MongoDB"))
   .catch((err) => console.error("❌ 連線失敗：", err));
 
@@ -38,7 +37,7 @@ app.get("/", (req, res) => {
   res.send("成績管理系統 API 運行中 🚀");
 });
 
-// 新增成績的 API (POST /grades)
+// ==============【 單筆新增成績 】=============
 app.post("/grades", async (req, res) => {
   try {
     let { studentName, subject, score } = req.body;
@@ -54,7 +53,7 @@ app.post("/grades", async (req, res) => {
   }
 });
 
-// 查詢所有成績的 API (GET /grades)
+// ==============【 查詢所有成績 】=============
 app.get("/grades", async (req, res) => {
   try {
     const grades = await Grade.find();
@@ -64,7 +63,34 @@ app.get("/grades", async (req, res) => {
   }
 });
 
-// 更新成績的 API (PUT /grades/:id)
+// ==============【 批次匯入成績 】=============
+app.post("/grades/batch", async (req, res) => {
+  try {
+    const { grades } = req.body;
+    // 檢查資料格式是否為陣列
+    if (!Array.isArray(grades)) {
+      return res.status(400).json({ success: false, message: "資料格式錯誤，需提供陣列" });
+    }
+    // 檢查每筆資料是否都有 studentName, subject, score
+    if (!grades.every(item => item.studentName && item.subject && item.score !== undefined)) {
+      return res.status(400).json({
+        success: false,
+        message: "每筆成績都需包含 { studentName, subject, score }"
+      });
+    }
+    // 批次插入
+    await Grade.insertMany(grades);
+    res.status(200).json({
+      success: true,
+      message: "批次匯入成功",
+      count: grades.length
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "批次匯入失敗", error: err });
+  }
+});
+
+// ==============【 更新單筆成績 】=============
 app.put("/grades/:id", async (req, res) => {
   try {
     const updatedGrade = await Grade.findByIdAndUpdate(
@@ -81,7 +107,7 @@ app.put("/grades/:id", async (req, res) => {
   }
 });
 
-// 刪除單筆成績的 API (DELETE /grades/:id)
+// ==============【 刪除單筆成績 】=============
 app.delete("/grades/:id", async (req, res) => {
   try {
     const deletedGrade = await Grade.findByIdAndDelete(req.params.id);
@@ -94,7 +120,7 @@ app.delete("/grades/:id", async (req, res) => {
   }
 });
 
-// 刪除所有成績的 API (DELETE /grades)
+// ==============【 刪除所有成績 】=============
 app.delete("/grades", async (req, res) => {
   try {
     const result = await Grade.deleteMany({});
@@ -104,7 +130,7 @@ app.delete("/grades", async (req, res) => {
   }
 });
 
-// 聚合同名學生的成績明細 (POST /grades/merge)
+// ==============【 統整成績：聚合同名學生 】=============
 app.post("/grades/merge", async (req, res) => {
   try {
     const groupedGrades = await Grade.aggregate([
@@ -122,9 +148,7 @@ app.post("/grades/merge", async (req, res) => {
   }
 });
 
-// 組距統計的 API (GET /grades/scoreDistribution)
-// 依據分數區間統計成績筆數，若 _id 為 90 則顯示 "90-100"
-// 只回傳各區間的筆數資訊
+// ==============【 組距統計 】=============
 app.get("/grades/scoreDistribution", async (req, res) => {
   try {
     const distribution = await Grade.aggregate([
@@ -140,7 +164,7 @@ app.get("/grades/scoreDistribution", async (req, res) => {
           boundaries: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 101],
           default: "Other",
           output: {
-            subjects: { $push: "$subject" }
+            count: { $sum: 1 }
           }
         }
       },
@@ -165,7 +189,7 @@ app.get("/grades/scoreDistribution", async (req, res) => {
               }
             ]
           },
-          count: { $ifNull: [{ $size: "$subjects" }, 0] },
+          count: 1,
           _id: 0
         }
       }
@@ -176,16 +200,14 @@ app.get("/grades/scoreDistribution", async (req, res) => {
   }
 });
 
-// 每人平均加總後的平均排名 (GET /grades/averageRanking)
-// 計算每位學生的平均分數與排名（不回傳總分與筆數）
+// ==============【 每人平均排名 】=============
 app.get("/grades/averageRanking", async (req, res) => {
   try {
     const ranking = await Grade.aggregate([
       {
         $group: {
           _id: "$studentName",
-          avgScore: { $avg: "$score" },
-          details: { $push: { subject: "$subject", score: "$score" } }
+          avgScore: { $avg: "$score" }
         }
       },
       {
@@ -200,7 +222,6 @@ app.get("/grades/averageRanking", async (req, res) => {
         $project: {
           studentName: "$_id",
           avgScore: 1,
-          details: 1,
           rank: 1,
           _id: 0
         }
@@ -212,8 +233,7 @@ app.get("/grades/averageRanking", async (req, res) => {
   }
 });
 
-// 新增科目成績統整的 API (GET /grades/subjectDistribution)
-// 此端點統整各科目各分數的筆數，回傳每個科目下各分數及筆數的統計結果
+// ==============【 科目成績統整 】=============
 app.get("/grades/subjectDistribution", async (req, res) => {
   try {
     const subjectDistribution = await Grade.aggregate([
@@ -244,7 +264,7 @@ app.get("/grades/subjectDistribution", async (req, res) => {
   }
 });
 
-// 啟動伺服器
-app.listen(port, () => {
-  console.log(`🚀 伺服器運行於 http://localhost:${port}`);
+// 啟動伺服器，監聽指定 IP
+app.listen(port, "192.168.0.11", () => {
+  console.log(`🚀 伺服器運行於 http://192.168.0.11:${port}`);
 });
