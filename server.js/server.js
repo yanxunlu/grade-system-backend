@@ -6,7 +6,7 @@ const bodyParser = require("body-parser");
 const path = require("path");
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000; // 使用 Render 提供的 port
 
 // 中間件設定
 app.use(cors());
@@ -264,10 +264,7 @@ app.get("/grades/subjectDistribution", async (req, res) => {
   }
 });
 
-// 啟動伺服器
-const port = process.env.PORT || 3000;
-
+// 啟動伺服器，監聽所有網路介面
 app.listen(port, "0.0.0.0", () => {
   console.log(`🚀 伺服器運行於 http://localhost:${port}`);
 });
-
