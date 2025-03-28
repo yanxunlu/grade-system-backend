@@ -6,14 +6,17 @@ const bodyParser = require("body-parser");
 const path = require("path");
 
 const app = express();
-const port = process.env.PORT || 3000; // 使用 Render 提供的 port
+const port = process.env.PORT || 3000;
 
 // 中間件設定
 app.use(cors());
 app.use(bodyParser.json());
 
-// 提供 images 資料夾作為靜態檔案服務
-app.use(express.static(path.join(__dirname, "images")));
+// 提供 images 資料夾作為靜態檔案服務（圖片位於根目錄的 images 資料夾）
+app.use("/images", express.static(path.join(__dirname, "..", "images")));
+
+// 提供根目錄所有靜態檔案（包括 index.html、student.html 等）
+app.use(express.static(path.join(__dirname, "..")));
 
 // 連線 MongoDB（請確認帳號、密碼、叢集名稱、資料庫名稱皆正確）
 mongoose
@@ -32,9 +35,9 @@ const gradeSchema = new mongoose.Schema({
 // 創建 Mongoose Model
 const Grade = mongoose.model("Grade", gradeSchema);
 
-// 測試 API：首頁
+// 修改首頁路由：回傳根目錄的 index.html 前端頁面
 app.get("/", (req, res) => {
-  res.send("成績管理系統 API 運行中 🚀");
+  res.sendFile(path.join(__dirname, "..", "index.html"));
 });
 
 // ==============【 單筆新增成績 】=============
@@ -264,7 +267,7 @@ app.get("/grades/subjectDistribution", async (req, res) => {
   }
 });
 
-// 啟動伺服器，監聽所有網路介面
-app.listen(port, "0.0.0.0", () => {
+// 啟動伺服器
+app.listen(port, () => {
   console.log(`🚀 伺服器運行於 http://localhost:${port}`);
 });
