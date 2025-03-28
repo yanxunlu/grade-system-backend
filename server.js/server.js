@@ -268,6 +268,7 @@ app.get("/grades/subjectDistribution", async (req, res) => {
 });
 
 // 啟動伺服器
-app.listen(port, () => {
+app.listen(port, "0.0.0.0", () => {
   console.log(`🚀 伺服器運行於 http://localhost:${port}`);
 });
+
