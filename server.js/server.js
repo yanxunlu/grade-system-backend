@@ -269,5 +269,5 @@ app.get("/grades/subjectDistribution", async (req, res) => {
 
 // 啟動伺服器
 app.listen(port, "192.168.0.11", () => {
-  console.log(`🚀 伺服器運行於 http://192.168.0.11:${port}`);
+  console.log(`🚀 伺服器運行於 http://192.168.0.11:3000`);
 });
