@@ -33,10 +33,10 @@ const gradeSchema = new mongoose.Schema({
 const Grade = mongoose.model("Grade", gradeSchema);
 
 // 測試 API：首頁
-// 讓根路由回傳前端 index.html 檔案
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "index.html"));
+  res.send("成績管理系統 API 運行中 🚀");
 });
+
 
 
 // ==============【 單筆新增成績 】=============
