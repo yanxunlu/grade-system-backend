@@ -210,6 +210,6 @@ app.get("/grades/subjectDistribution", async (req, res) => {
 });
 
 // 啟動伺服器，監聽指定 IP
-app.listen(port, "192.168.0.11", () => {
-  console.log(`🚀 伺服器運行於 http://192.168.0.11:${port}`);
+app.listen(port, () => {
+  console.log(`🚀 Server is running on port ${port}`);
 });
