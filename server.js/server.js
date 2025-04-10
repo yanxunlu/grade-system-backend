@@ -243,6 +243,27 @@ app.get("/grades/averageRanking", async (req, res) => {
     res.status(500).json({ message: "平均排名失敗", error: err });
   }
 });
+async function mergeGrades() {
+  try {
+    const result = await Grade.aggregate([
+      {
+        $group: {
+          _id: "$studentName",
+          totalScore: { $sum: "$score" },
+          avgScore: { $avg: "$score" },
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $sort: { totalScore: -1 },
+      },
+    ]);
+    return result;  // 返回統整結果
+  } catch (err) {
+    console.error("統整成績時發生錯誤：", err);
+    throw new Error("統整成績失敗");
+  }
+}
 
 // 啟動伺服器，監聽指定 IP
 app.listen(port, () => {
