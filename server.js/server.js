@@ -134,6 +134,14 @@ app.delete("/grades", async (req, res) => {
 });
 
 // ==============【 統整成績：聚合同名學生 】=============
+app.post("/grades/merge", async (req, res) => {
+  try {
+    const data = await mergeGrades(); // 這是你合併成績的邏輯
+    res.status(200).json({ data: data });
+  } catch (err) {
+    res.status(500).json({ message: "統整成績失敗", error: err });
+  }
+});
 // ==============【 組距統計：依科目分類 】=============
 app.get("/grades/scoreDistribution", async (req, res) => {
   try {
@@ -206,6 +214,33 @@ app.get("/grades/subjectDistribution", async (req, res) => {
     res.status(200).json({ data: subjectDistribution });
   } catch (err) {
     res.status(500).json({ message: "科目成績統整失敗", error: err });
+  }
+});
+// ==============【 每人平均分數及排名 】=============
+app.get("/grades/averageRanking", async (req, res) => {
+  try {
+    const averages = await Grade.aggregate([
+      {
+        $group: {
+          _id: "$studentName",
+          avgScore: { $avg: "$score" }
+        }
+      },
+      {
+        $sort: { avgScore: -1 }
+      }
+    ]);
+
+    // 加上排名
+    const result = averages.map((item, index) => ({
+      studentName: item._id,
+      avgScore: item.avgScore,
+      rank: index + 1
+    }));
+
+    res.status(200).json({ data: result });
+  } catch (err) {
+    res.status(500).json({ message: "平均排名失敗", error: err });
   }
 });
 
