@@ -137,11 +137,12 @@ app.delete("/grades", async (req, res) => {
 app.post("/grades/merge", async (req, res) => {
   try {
     const data = await mergeGrades(); // 這是你合併成績的邏輯
-    res.status(200).json({ data: data });
+    res.status(200).json({ data: data }); // 返回合併的成績資料
   } catch (err) {
     res.status(500).json({ message: "統整成績失敗", error: err });
   }
 });
+
 // ==============【 組距統計：依科目分類 】=============
 app.get("/grades/scoreDistribution", async (req, res) => {
   try {
@@ -248,22 +249,25 @@ async function mergeGrades() {
     const result = await Grade.aggregate([
       {
         $group: {
-          _id: "$studentName",
-          totalScore: { $sum: "$score" },
-          avgScore: { $avg: "$score" },
-          count: { $sum: 1 },
-        },
+          _id: "$studentName",  // 根據學生姓名分組
+          totalScore: { $sum: "$score" },  // 計算每個學生的總分
+          averageScore: { $avg: "$score" }, // 計算每個學生的平均分數
+          count: { $sum: 1 },  // 計算每個學生的成績數量
+        }
       },
       {
-        $sort: { totalScore: -1 },
-      },
+        $sort: { totalScore: -1 }  // 依總分排序
+      }
     ]);
-    return result;  // 返回統整結果
+
+    console.log("統整成績結果：", result); // 檢查返回的資料
+    return result;
   } catch (err) {
     console.error("統整成績時發生錯誤：", err);
     throw new Error("統整成績失敗");
   }
 }
+
 
 // 啟動伺服器，監聽指定 IP
 app.listen(port, () => {
