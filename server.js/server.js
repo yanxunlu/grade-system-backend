@@ -133,15 +133,27 @@ app.delete("/grades", async (req, res) => {
   }
 });
 
-// ==============【 統整成績：聚合同名學生 】=============
+// ==============【 統整成績：根據學生姓名顯示所有成績 】=============
 app.post("/grades/merge", async (req, res) => {
   try {
-    const data = await mergeGrades(); // 這是你合併成績的邏輯
-    res.status(200).json({ data: data }); // 返回合併的成績資料
+    const result = await Grade.aggregate([
+      {
+        $group: {
+          _id: "$studentName",  // 根據學生姓名分組
+          grades: { $push: { subject: "$subject", score: "$score" } },  // 收集每個學生的所有成績
+        }
+      },
+      {
+        $sort: { _id: 1 }  // 根據學生姓名排序
+      }
+    ]);
+
+    res.status(200).json({ data: result });  // 返回每個學生的所有成績
   } catch (err) {
     res.status(500).json({ message: "統整成績失敗", error: err });
   }
 });
+
 
 
 // ==============【 組距統計：依科目分類 】=============
