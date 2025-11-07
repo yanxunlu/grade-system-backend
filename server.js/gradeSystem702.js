@@ -21,7 +21,10 @@ app.use(express.static(path.join(__dirname, "public")));
 // 連線 MongoDB（請確認帳號、密碼、叢集名稱、資料庫名稱皆正確）
 mongoose
   .connect("mongodb+srv://yanxun:a510755555@cluster0.8j0ui.mongodb.net/gradeSystem_702?retryWrites=true&w=majority&appName=Cluster0")
-  .then(() => console.log("✅ 已連線 MongoDB"))
+  .then(() => {
+    console.log("✅ 已連線 MongoDB");
+    console.log("🎯 使用資料庫:", mongoose.connection.name);
+  })
   .catch((err) => console.error("❌ 連線失敗：", err));
 
 // 定義成績 Schema
@@ -286,4 +289,5 @@ async function mergeGrades() {
 app.listen(port, () => {
   console.log(`🚀 Server is running on port ${port}`);
 });
+
 
