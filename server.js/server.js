@@ -16,13 +16,11 @@ app.use(express.static(path.join(__dirname, "images")));
 app.use(express.static(path.join(__dirname, "public")));
 
 // =================【 資料庫連線 】=================
-// 1. 連線 MongoDB (儲存學生成績)
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ 已連線 MongoDB (成績庫)"))
   .catch((err) => console.error("❌ MongoDB 連線失敗：", err));
 
-// 2. 初始化 Supabase (讀取晚餐系統的家長 LINE UID)
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 // =================【 MongoDB 模型 Schema 】=================
@@ -34,8 +32,7 @@ const gradeSchema = new mongoose.Schema({
 });
 const Grade = mongoose.model("Grade", gradeSchema);
 
-// =================【 LINE 推播核心函數 (跨 Supabase 查詢) 】=================
-// =================【 LINE 推播核心函數 (加強除錯版) 】=================
+// =================【 LINE 推播核心函數 (精美字卡版) 】=================
 const sendLinePush = async (studentName, message) => {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!token) {
@@ -44,33 +41,63 @@ const sendLinePush = async (studentName, message) => {
   }
 
   try {
-    // 查詢 Supabase
     const { data, error } = await supabase
-      .from('students') // 確認你的表名是 students 還是 users
+      .from('students') 
       .select('line_user_id')
-      .eq('name', studentName) // 確認你的欄位是 name 還是 姓名
+      .eq('name', studentName) 
       .single();
 
     if (error || !data || !data.line_user_id) {
-      console.log(`⚠️ Supabase 找不到【${studentName}】的 UID。資料庫回傳：`, data);
+      console.log(`⚠️ Supabase 找不到【${studentName}】的 UID。`);
       return;
     }
 
     const targetUid = data.line_user_id;
-    console.log(`\n🔍 準備發送給【${studentName}】，抓到的 UID 是：[${targetUid}]`);
 
-    // 檢查 UID 格式 (必須是 U 開頭的 33 碼字串)
     if (!targetUid.startsWith('U') || targetUid.length !== 33) {
-      console.log(`❌ 錯誤：這不是有效的 LINE UID！(你可能抓到 "無效的" 或其他怪字串)`);
+      console.log(`❌ 錯誤：這不是有效的 LINE UID！抓到的是：[${targetUid}]`);
       return;
     }
 
-    // 發送推播
-    const response = await axios.post(
+    await axios.post(
       "https://api.line.me/v2/bot/message/push",
       {
         to: targetUid,
-        messages: [{ type: "text", text: message }]
+        messages: [
+          {
+            type: "flex",
+            altText: "🔔 您有一則新成績通知",
+            contents: {
+              type: "bubble",
+              size: "mega",
+              body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  { type: "text", text: "🔔 最新成績通知", weight: "bold", color: "#1DB446", size: "sm" },
+                  { type: "text", text: studentName, weight: "bold", size: "xl", margin: "md" },
+                  { type: "text", text: message, size: "md", margin: "md", wrap: true }
+                ]
+              },
+              footer: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  {
+                    type: "button",
+                    style: "primary",
+                    color: "#1DB446",
+                    action: {
+                      type: "uri",
+                      label: "詳細內容", // 按鈕文字已更新
+                      uri: "https://cyshzoo.netlify.app/student.html"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
       },
       {
         headers: {
@@ -79,22 +106,17 @@ const sendLinePush = async (studentName, message) => {
         }
       }
     );
-    
-    console.log(`✅ 已成功推播！LINE 伺服器回應狀態碼：${response.status}`);
+    console.log(`✅ 已成功推播字卡給【${studentName}】的家長！`);
   } catch (err) {
     console.error("❌ LINE 推播失敗：", err.response ? JSON.stringify(err.response.data) : err.message);
   }
 };
-// ======================================================================
-// ======================================================================
-// ======================================================================
 
 // =================【 API 路由 】=================
 app.get("/", (req, res) => {
   res.send("成績管理系統 API 運行中 🚀");
 });
 
-// 1. 單筆新增 (含推播)
 app.post("/grades", async (req, res) => {
   try {
     let { studentName, subject, score } = req.body;
@@ -105,8 +127,8 @@ app.post("/grades", async (req, res) => {
     const newGrade = new Grade({ studentName, subject, score });
     await newGrade.save();
 
-    // 觸發推播
-    const msg = `🔔【成績通知】\n${studentName} 的 ${subject} 成績已上傳，分數為：${score}\n\n若要查詢詳細內容，請至：\nhttps://cyshzoo.netlify.app/student.html`;
+    // 觸發推播 (字卡文字)
+    const msg = `${subject} 成績已上傳，分數為：${score}`;
     await sendLinePush(studentName, msg);
 
     res.status(201).json({ message: "成績已新增", data: newGrade });
@@ -115,7 +137,6 @@ app.post("/grades", async (req, res) => {
   }
 });
 
-// 2. 批次匯入 (含推播)
 app.post("/grades/batch", async (req, res) => {
   try {
     const { grades } = req.body;
@@ -125,7 +146,6 @@ app.post("/grades/batch", async (req, res) => {
     
     await Grade.insertMany(grades);
 
-    // 整理每個學生的成績清單，準備發送推播
     const studentUpdates = {};
     grades.forEach(g => {
       if (!studentUpdates[g.studentName]) studentUpdates[g.studentName] = [];
@@ -133,7 +153,8 @@ app.post("/grades/batch", async (req, res) => {
     });
 
     for (const studentName of Object.keys(studentUpdates)) {
-      const msg = `📢【批次成績更新】\n${studentName} 的最新成績如下：\n${studentUpdates[studentName].join('\n')}\n\n若要查詢詳細內容，請至：\nhttps://cyshzoo.netlify.app/student.html`;
+      // 觸發批次推播 (字卡文字)
+      const msg = `以下是最新成績更新：\n${studentUpdates[studentName].join('\n')}`;
       await sendLinePush(studentName, msg);
     }
 
@@ -221,7 +242,6 @@ app.get("/grades/averageRanking", async (req, res) => {
   } catch (err) { res.status(500).json({ message: "平均排名失敗", error: err }); }
 });
 
-// 啟動伺服器
 app.listen(port, () => {
   console.log(`🚀 Server is running on port ${port}`);
 });
