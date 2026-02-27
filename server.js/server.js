@@ -106,7 +106,7 @@ app.post("/grades", async (req, res) => {
     await newGrade.save();
 
     // 觸發推播
-    const msg = `🔔【成績通知】\n${studentName} 的 ${subject} 成績已上傳，分數為：${score}\n\n若要查詢完整成績，請至：\nhttps://cyshzoo.netlify.app/student.html`;
+    const msg = `🔔【成績通知】\n${studentName} 的 ${subject} 成績已上傳，分數為：${score}\n\n若要查詢詳細內容，請至：\nhttps://cyshzoo.netlify.app/student.html`;
     await sendLinePush(studentName, msg);
 
     res.status(201).json({ message: "成績已新增", data: newGrade });
@@ -133,7 +133,7 @@ app.post("/grades/batch", async (req, res) => {
     });
 
     for (const studentName of Object.keys(studentUpdates)) {
-      const msg = `📢【批次成績更新】\n${studentName} 的最新成績如下：\n${studentUpdates[studentName].join('\n')}\n\n若要查詢完整成績，請至：\nhttps://cyshzoo.netlify.app/student.html`;
+      const msg = `📢【批次成績更新】\n${studentName} 的最新成績如下：\n${studentUpdates[studentName].join('\n')}\n\n若要查詢詳細內容，請至：\nhttps://cyshzoo.netlify.app/student.html`;
       await sendLinePush(studentName, msg);
     }
 
