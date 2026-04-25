@@ -7,11 +7,18 @@ const path = require("path");
 const axios = require("axios");
 const { createClient } = require("@supabase/supabase-js");
 
+// 🟢 新增 1：引入 Google AI 套件
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
 const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(bodyParser.json());
+
+// 🟢 新增 2：放寬上傳限制到 10mb，避免照片太大傳送失敗 (覆蓋原本的 bodyParser.json())
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
+
 app.use(express.static(path.join(__dirname, "images")));
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -23,6 +30,9 @@ mongoose
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
+// 🟢 新增 3：初始化 Gemini AI (請在 Render 後台環境變數補上 GEMINI_API_KEY)
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
 // =================【 MongoDB 模型 Schema 】=================
 const gradeSchema = new mongoose.Schema({
   studentName: String,
@@ -33,6 +43,7 @@ const gradeSchema = new mongoose.Schema({
 const Grade = mongoose.model("Grade", gradeSchema);
 
 // =================【 LINE 推播核心函數 (精美字卡版) 】=================
+// 這裡完全是你原本的代碼，毫無更動
 const sendLinePush = async (studentName, message) => {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!token) {
@@ -89,7 +100,7 @@ const sendLinePush = async (studentName, message) => {
                     color: "#1DB446",
                     action: {
                       type: "uri",
-                      label: "詳細內容", // 按鈕文字已更新
+                      label: "詳細內容", 
                       uri: "https://cyshzoo.netlify.app/student.html"
                     }
                   }
@@ -113,6 +124,30 @@ const sendLinePush = async (studentName, message) => {
 };
 
 // =================【 API 路由 】=================
+
+// 🟢 新增 4：這個 API 專門接收前端照片，回傳辨識後的 JSON 給前端
+app.post("/api/ocr-score", async (req, res) => {
+  try {
+    const { imageBase64 } = req.body;
+    if (!imageBase64) return res.status(400).json({ message: "無影像資料" });
+
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const prompt = "你是一個成績單辨識助手。請辨識圖中的『學生姓名』、『科目名稱』、『成績分數』。請只回傳 JSON 格式：{\"studentName\":\"...\",\"subject\":\"...\",\"score\":100}";
+    
+    const result = await model.generateContent([
+      prompt,
+      { inlineData: { data: imageBase64, mimeType: "image/jpeg" } }
+    ]);
+
+    const text = result.response.text().replace(/```json|```/g, "").trim();
+    res.json(JSON.parse(text));
+  } catch (err) {
+    console.error("辨識錯誤:", err);
+    res.status(500).json({ message: "辨識失敗" });
+  }
+});
+
+// 以下完全是你原本的路由，沒有任何更動
 app.get("/", (req, res) => {
   res.send("成績管理系統 API 運行中 🚀");
 });
