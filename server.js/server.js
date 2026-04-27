@@ -134,9 +134,12 @@ app.post("/api/ocr-score", async (req, res) => {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const prompt = "你是一個成績單辨識助手。請辨識圖中的『學生姓名』、『科目名稱』、『成績分數』。請只回傳 JSON 格式：{\"studentName\":\"...\",\"subject\":\"...\",\"score\":100}";
     
+    // 👇 修正重點：把前端傳來的 data:image/jpeg;base64, 前綴拔掉
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+
     const result = await model.generateContent([
       prompt,
-      { inlineData: { data: imageBase64, mimeType: "image/jpeg" } }
+      { inlineData: { data: base64Data, mimeType: "image/jpeg" } }
     ]);
 
     const text = result.response.text().replace(/```json|```/g, "").trim();
