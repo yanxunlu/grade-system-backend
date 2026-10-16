@@ -28,7 +28,7 @@ const supabase = createClient(
 // 初始化 Gemini AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// =================【 LINE 推播核心函數 (語法完全修正版) 】=================
+// =================【 LINE 推播核心函數 (含老師同步通知) 】=================
 const sendLinePush = async (studentName, message) => {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!token) {
@@ -110,7 +110,7 @@ const sendLinePush = async (studentName, message) => {
       console.log("⚠️ 抓取 newgrades 資料庫計算排名失敗：", gradeError.message);
     }
 
-    // 3. 發送美化後的 Flex Message (使用 alignItems 替代錯誤的 align)
+    // 3. 發送美化後的 Flex Message 給家長
     await axios.post(
       "https://api.line.me/v2/bot/message/push",
       {
@@ -310,7 +310,34 @@ const sendLinePush = async (studentName, message) => {
         },
       }
     );
-    console.log(`✅ 已成功推播「美化排名字卡」給【${studentName}】！`);
+    console.log(`✅ 已成功推播「美化排名字卡」給家長【${studentName}】！`);
+
+    // 4. 發送推播成功與排名報告給老師
+    const teacherUid = process.env.TEACHER_LINE_UID;
+    if (teacherUid) {
+      await axios.post(
+        "https://api.line.me/v2/bot/message/push",
+        {
+          to: teacherUid,
+          messages: [
+            {
+              type: "text",
+              text: `✅ 系統通知：\n已成功將【${studentName}】的成績推播給家長。\n\n📊 目前成績概況：\n- 總分：${totalScore} 分\n- 均分：${avgScore}\n- 班級排名：${currentRank}\n\n📝 推播內容細項：\n${message}`
+            }
+          ]
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      console.log(`✅ 已同步將結果通知老師！`);
+    } else {
+      console.log(`⚠️ 提示：尚未在環境變數設定 TEACHER_LINE_UID，略過發送給老師。`);
+    }
+
   } catch (err) {
     console.error(
       "❌ LINE 推播 API 呼叫失敗：",
