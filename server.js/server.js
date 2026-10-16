@@ -28,7 +28,7 @@ const supabase = createClient(
 // 初始化 Gemini AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// =================【 LINE 推播核心函數 (精美字卡版) 】=================
+// =================【 LINE 推播核心函數 (質感排名總成績版) 】=================
 const sendLinePush = async (studentName, message) => {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!token) {
@@ -37,24 +37,67 @@ const sendLinePush = async (studentName, message) => {
   }
 
   try {
-    const { data, error } = await supabase
+    // 1. 從 Supabase 取得學生的 LINE UID
+    const { data: studentData, error: studentError } = await supabase
       .from("students")
       .select("line_user_id")
       .eq("name", studentName)
       .single();
 
-    if (error || !data || !data.line_user_id) {
+    if (studentError || !studentData || !studentData.line_user_id) {
       console.log(`⚠️ Supabase 找不到【${studentName}】的 UID。`);
       return;
     }
 
-    const targetUid = data.line_user_id;
-
+    const targetUid = studentData.line_user_id;
     if (!targetUid.startsWith("U") || targetUid.length !== 33) {
       console.log(`❌ 錯誤：這不是有效的 LINE UID！抓到的是：[${targetUid}]`);
       return;
     }
 
+    // 2. 即時計算全班平均與排名
+    const { data: allGrades, error: gradeError } = await supabase
+      .from("newgrades")
+      .select("*");
+
+    let totalScore = 0;
+    let avgScore = "0.0";
+    let currentRank = "暫無";
+    let totalStudents = 0;
+
+    if (!gradeError && allGrades && allGrades.length > 0) {
+      const studentStats = {};
+
+      allGrades.forEach((g) => {
+        if (!studentStats[g.studentName]) {
+          studentStats[g.studentName] = { total: 0, count: 0 };
+        }
+        studentStats[g.studentName].total += Number(g.score);
+        studentStats[g.studentName].count += 1;
+      });
+
+      const rankings = Object.keys(studentStats).map((name) => ({
+        name,
+        total: studentStats[name].total,
+        avg: studentStats[name].total / studentStats[name].count,
+      }));
+
+      // 按平均分數由高到低排序
+      rankings.sort((a, b) => b.avg - a.avg);
+
+      totalStudents = rankings.length;
+      const myRankIndex = rankings.findIndex((r) => r.name === studentName);
+
+      if (myRankIndex !== -1) {
+        currentRank = `第 ${myRankIndex + 1} 名`;
+        totalScore = studentStats[studentName].total.toFixed(1);
+        avgScore = (
+          studentStats[studentName].total / studentStats[studentName].count
+        ).toFixed(1);
+      }
+    }
+
+    // 3. 發送美化後的 Flex Message
     await axios.post(
       "https://api.line.me/v2/bot/message/push",
       {
@@ -62,34 +105,171 @@ const sendLinePush = async (studentName, message) => {
         messages: [
           {
             type: "flex",
-            altText: "🔔 您有一則新成績通知",
+            altText: `🔔 ${studentName} 的最新成績通知`,
             contents: {
               type: "bubble",
               size: "mega",
-              body: {
+              styles: {
+                header: { backgroundColor: "#1DB446" },
+                footer: { separator: true },
+              },
+              header: {
                 type: "box",
                 layout: "vertical",
                 contents: [
                   {
                     type: "text",
-                    text: "🔔 最新成績通知",
+                    text: "ACADEMIC REPORT",
                     weight: "bold",
-                    color: "#1DB446",
-                    size: "sm",
+                    color: "#FFFFFFCC",
+                    size: "xs",
+                    space: "xs",
                   },
                   {
                     type: "text",
-                    text: studentName,
+                    text: "🔔 最新成績與排名通知",
                     weight: "bold",
-                    size: "xl",
-                    margin: "md",
+                    color: "#FFFFFF",
+                    size: "lg",
+                    margin: "xs",
                   },
+                ],
+              },
+              body: {
+                type: "box",
+                layout: "vertical",
+                spacing: "md",
+                contents: [
+                  // 學生姓名與標籤
                   {
-                    type: "text",
-                    text: message,
-                    size: "md",
+                    type: "box",
+                    layout: "horizontal",
+                    alignment: "center",
+                    contents: [
+                      {
+                        type: "text",
+                        text: studentName,
+                        weight: "bold",
+                        size: "xl",
+                        color: "#111111",
+                      },
+                      {
+                        type: "box",
+                        layout: "vertical",
+                        backgroundColor: "#E8F5E9",
+                        cornerRadius: "xs",
+                        paddingStart: "sm",
+                        paddingEnd: "sm",
+                        paddingTop: "xs",
+                        paddingBottom: "xs",
+                        contents: [
+                          {
+                            type: "text",
+                            text: "個人成績單",
+                            size: "xs",
+                            color: "#1DB446",
+                            weight: "bold",
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  { type: "separator" },
+                  // 本次更新內容
+                  {
+                    type: "box",
+                    layout: "vertical",
                     margin: "md",
-                    wrap: true,
+                    spacing: "xs",
+                    contents: [
+                      {
+                        type: "text",
+                        text: "【本次新增 / 更新細項】",
+                        size: "xs",
+                        color: "#aaaaaa",
+                        weight: "bold",
+                      },
+                      {
+                        type: "text",
+                        text: message,
+                        size: "sm",
+                        color: "#333333",
+                        wrap: true,
+                        margin: "xs",
+                      },
+                    ],
+                  },
+                  { type: "separator" },
+                  // 總成績與排名數據卡片 (雙欄式)
+                  {
+                    type: "box",
+                    layout: "horizontal",
+                    margin: "md",
+                    spacing: "md",
+                    contents: [
+                      {
+                        type: "box",
+                        layout: "vertical",
+                        backgroundColor: "#F8F9FA",
+                        cornerRadius: "md",
+                        paddingAll: "md",
+                        flex: 1,
+                        contents: [
+                          {
+                            type: "text",
+                            text: "總分 / 平均",
+                            size: "xs",
+                            color: "#888888",
+                          },
+                          {
+                            type: "text",
+                            text: `${totalScore} 分`,
+                            weight: "bold",
+                            size: "md",
+                            color: "#222222",
+                            margin: "xs",
+                          },
+                          {
+                            type: "text",
+                            text: `均分 ${avgScore}`,
+                            size: "xs",
+                            color: "#1DB446",
+                            margin: "xs",
+                          },
+                        ],
+                      },
+                      {
+                        type: "box",
+                        layout: "vertical",
+                        backgroundColor: "#F8F9FA",
+                        cornerRadius: "md",
+                        paddingAll: "md",
+                        flex: 1,
+                        contents: [
+                          {
+                            type: "text",
+                            text: "全班排名",
+                            size: "xs",
+                            color: "#888888",
+                          },
+                          {
+                            type: "text",
+                            text: currentRank,
+                            weight: "bold",
+                            size: "md",
+                            color: "#D32F2F",
+                            margin: "xs",
+                          },
+                          {
+                            type: "text",
+                            text: `總人數 ${totalStudents} 人`,
+                            size: "xs",
+                            color: "#888888",
+                            margin: "xs",
+                          },
+                        ],
+                      },
+                    ],
                   },
                 ],
               },
@@ -101,9 +281,10 @@ const sendLinePush = async (studentName, message) => {
                     type: "button",
                     style: "primary",
                     color: "#1DB446",
+                    height: "sm",
                     action: {
                       type: "uri",
-                      label: "詳細內容",
+                      label: "查看詳細成績系統",
                       uri: "https://cyshzoo.netlify.app/student.html",
                     },
                   },
@@ -120,7 +301,7 @@ const sendLinePush = async (studentName, message) => {
         },
       }
     );
-    console.log(`✅ 已成功推播字卡給【${studentName}】的家長！`);
+    console.log(`✅ 已成功推播「美化排名字卡」給【${studentName}】！`);
   } catch (err) {
     console.error(
       "❌ LINE 推播失敗：",
