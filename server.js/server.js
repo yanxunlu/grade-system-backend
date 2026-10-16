@@ -28,7 +28,7 @@ const supabase = createClient(
 // 初始化 Gemini AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// =================【 LINE 推播核心函數 (防爆優化版) 】=================
+// =================【 LINE 推播核心函數 (修正語法版) 】=================
 const sendLinePush = async (studentName, message) => {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!token) {
@@ -76,7 +76,6 @@ const sendLinePush = async (studentName, message) => {
       const studentStats = {};
 
       allGrades.forEach((g) => {
-        // 相容欄位大小寫
         const sName = g.studentName || g.studentname;
         const sScore = Number(g.score) || 0;
 
@@ -95,7 +94,6 @@ const sendLinePush = async (studentName, message) => {
         avg: studentStats[name].total / studentStats[name].count,
       }));
 
-      // 按平均分數由高到低排序
       rankings.sort((a, b) => b.avg - a.avg);
 
       totalStudents = rankings.length;
@@ -112,7 +110,7 @@ const sendLinePush = async (studentName, message) => {
       console.log("⚠️ 抓取 newgrades 資料庫計算排名失敗：", gradeError.message);
     }
 
-    // 3. 發送美化後的 Flex Message
+    // 3. 發送美化後的 Flex Message (已修正 space 語法)
     await axios.post(
       "https://api.line.me/v2/bot/message/push",
       {
