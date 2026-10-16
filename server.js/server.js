@@ -28,28 +28,35 @@ const supabase = createClient(
 // 初始化 Gemini AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// =================【 LINE 推播核心函數 (質感排名總成績版) 】=================
+// =================【 LINE 推播核心函數 (防爆優化版) 】=================
 const sendLinePush = async (studentName, message) => {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!token) {
-    console.log("⚠️ 錯誤：找不到 Token，請檢查 .env 檔案");
+    console.log("⚠️ 錯誤：找不到 LINE_CHANNEL_ACCESS_TOKEN 環境變數");
     return;
   }
 
   try {
+    console.log(`🔍 開始處理【${studentName}】的推播任務...`);
+
     // 1. 從 Supabase 取得學生的 LINE UID
     const { data: studentData, error: studentError } = await supabase
       .from("students")
       .select("line_user_id")
       .eq("name", studentName)
-      .single();
+      .maybeSingle();
 
-    if (studentError || !studentData || !studentData.line_user_id) {
-      console.log(`⚠️ Supabase 找不到【${studentName}】的 UID。`);
+    if (studentError) {
+      console.log(`❌ 查詢學生資料表失敗：`, studentError.message);
       return;
     }
 
-    const targetUid = studentData.line_user_id;
+    if (!studentData || !studentData.line_user_id) {
+      console.log(`⚠️ Supabase 中的 students 資料表找不到【${studentName}】的 UID。`);
+      return;
+    }
+
+    const targetUid = studentData.line_user_id.trim();
     if (!targetUid.startsWith("U") || targetUid.length !== 33) {
       console.log(`❌ 錯誤：這不是有效的 LINE UID！抓到的是：[${targetUid}]`);
       return;
@@ -60,7 +67,7 @@ const sendLinePush = async (studentName, message) => {
       .from("newgrades")
       .select("*");
 
-    let totalScore = 0;
+    let totalScore = "0.0";
     let avgScore = "0.0";
     let currentRank = "暫無";
     let totalStudents = 0;
@@ -69,11 +76,17 @@ const sendLinePush = async (studentName, message) => {
       const studentStats = {};
 
       allGrades.forEach((g) => {
-        if (!studentStats[g.studentName]) {
-          studentStats[g.studentName] = { total: 0, count: 0 };
+        // 相容欄位大小寫
+        const sName = g.studentName || g.studentname;
+        const sScore = Number(g.score) || 0;
+
+        if (sName) {
+          if (!studentStats[sName]) {
+            studentStats[sName] = { total: 0, count: 0 };
+          }
+          studentStats[sName].total += sScore;
+          studentStats[sName].count += 1;
         }
-        studentStats[g.studentName].total += Number(g.score);
-        studentStats[g.studentName].count += 1;
       });
 
       const rankings = Object.keys(studentStats).map((name) => ({
@@ -95,6 +108,8 @@ const sendLinePush = async (studentName, message) => {
           studentStats[studentName].total / studentStats[studentName].count
         ).toFixed(1);
       }
+    } else if (gradeError) {
+      console.log("⚠️ 抓取 newgrades 資料庫計算排名失敗：", gradeError.message);
     }
 
     // 3. 發送美化後的 Flex Message
@@ -123,7 +138,6 @@ const sendLinePush = async (studentName, message) => {
                     weight: "bold",
                     color: "#FFFFFFCC",
                     size: "xs",
-                    space: "xs",
                   },
                   {
                     type: "text",
@@ -140,7 +154,6 @@ const sendLinePush = async (studentName, message) => {
                 layout: "vertical",
                 spacing: "md",
                 contents: [
-                  // 學生姓名與標籤
                   {
                     type: "box",
                     layout: "horizontal",
@@ -175,7 +188,6 @@ const sendLinePush = async (studentName, message) => {
                     ],
                   },
                   { type: "separator" },
-                  // 本次更新內容
                   {
                     type: "box",
                     layout: "vertical",
@@ -200,7 +212,6 @@ const sendLinePush = async (studentName, message) => {
                     ],
                   },
                   { type: "separator" },
-                  // 總成績與排名數據卡片 (雙欄式)
                   {
                     type: "box",
                     layout: "horizontal",
@@ -304,7 +315,7 @@ const sendLinePush = async (studentName, message) => {
     console.log(`✅ 已成功推播「美化排名字卡」給【${studentName}】！`);
   } catch (err) {
     console.error(
-      "❌ LINE 推播失敗：",
+      "❌ LINE 推播 API 呼叫失敗：",
       err.response ? JSON.stringify(err.response.data) : err.message
     );
   }
@@ -356,11 +367,14 @@ app.post("/grades", async (req, res) => {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("❌ 寫入 Supabase 失敗：", error.message);
+      throw error;
+    }
 
-    // 觸發推播 (字卡文字)
+    // 觸發推播 (背景非同步執行，不擋 API 回傳)
     const msg = `${subject} 成績已上傳，分數為：${score}`;
-    await sendLinePush(studentName, msg);
+    sendLinePush(studentName, msg);
 
     res.status(201).json({ message: "成績已新增", data: newGrade });
   } catch (err) {
@@ -397,7 +411,7 @@ app.post("/grades/batch", async (req, res) => {
       const msg = `以下是最新成績更新：\n${studentUpdates[studentName].join(
         "\n"
       )}`;
-      await sendLinePush(studentName, msg);
+      sendLinePush(studentName, msg);
     }
 
     res
@@ -473,7 +487,7 @@ app.delete("/grades", async (req, res) => {
     const { data, error } = await supabase
       .from("newgrades")
       .delete()
-      .neq("id", 0); // 刪除所有資料
+      .neq("id", 0);
 
     if (error) throw error;
     res.status(200).json({ message: "所有成績已刪除", data });
@@ -490,13 +504,16 @@ app.post("/grades/merge", async (req, res) => {
 
     const merged = {};
     grades.forEach((g) => {
-      if (!merged[g.studentName]) {
-        merged[g.studentName] = { _id: g.studentName, grades: [] };
+      const sName = g.studentName || g.studentname;
+      if (sName) {
+        if (!merged[sName]) {
+          merged[sName] = { _id: sName, grades: [] };
+        }
+        merged[sName].grades.push({
+          subject: g.subject,
+          score: g.score,
+        });
       }
-      merged[g.studentName].grades.push({
-        subject: g.subject,
-        score: g.score,
-      });
     });
 
     const result = Object.values(merged).sort((a, b) =>
@@ -559,11 +576,14 @@ app.get("/grades/averageRanking", async (req, res) => {
 
     const studentScores = {};
     grades.forEach((g) => {
-      if (!studentScores[g.studentName]) {
-        studentScores[g.studentName] = { total: 0, count: 0 };
+      const sName = g.studentName || g.studentname;
+      if (sName) {
+        if (!studentScores[sName]) {
+          studentScores[sName] = { total: 0, count: 0 };
+        }
+        studentScores[sName].total += Number(g.score) || 0;
+        studentScores[sName].count += 1;
       }
-      studentScores[g.studentName].total += g.score;
-      studentScores[g.studentName].count += 1;
     });
 
     const averages = Object.keys(studentScores).map((studentName) => ({
