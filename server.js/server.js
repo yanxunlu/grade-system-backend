@@ -110,7 +110,7 @@ const sendLinePush = async (studentName, message) => {
       console.log("⚠️ 抓取 newgrades 資料庫計算排名失敗：", gradeError.message);
     }
 
-    // 3. 發送美化後的 Flex Message (已修復 align 語法)
+    // 3. 發送美化後的 Flex Message (使用 alignItems 替代錯誤的 align)
     await axios.post(
       "https://api.line.me/v2/bot/message/push",
       {
@@ -155,7 +155,7 @@ const sendLinePush = async (studentName, message) => {
                   {
                     type: "box",
                     layout: "horizontal",
-                    align: "center",
+                    alignItems: "center",
                     contents: [
                       {
                         type: "text",
@@ -370,7 +370,7 @@ app.post("/grades", async (req, res) => {
       throw error;
     }
 
-    // 觸發推播 (背景非同步執行，不擋 API 回傳)
+    // 觸發推播 (背景非同步執行)
     const msg = `${subject} 成績已上傳，分數為：${score}`;
     sendLinePush(studentName, msg);
 
